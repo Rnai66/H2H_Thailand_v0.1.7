@@ -1,0 +1,20 @@
+{
+  "name": "h2h-thailand",
+  "version": "0.1.7",
+  "private": true,
+  "scripts": {
+    "install:all": "npm i --prefix backend && npm i --prefix frontend",
+    "dev:all": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "test:db": "npm run test:db --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "clean": "rm -rf backend/node_modules frontend/node_modules frontend/dist package-lock.json backend/package-lock.json frontend/package-lock.json"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "recharts": "^3.3.0"
+  }
+}
