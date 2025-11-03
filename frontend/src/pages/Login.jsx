@@ -1,11 +1,13 @@
+// frontend/src/pages/Login.jsx
 import React, { useState } from "react";
-import { api } from "../api";
+import api from "../lib/api";            // ✅ default import ถูกต้อง + path ถูก
+import { setToken } from "../lib/auth";  // ✅ เก็บ token สำหรับครั้งถัดไป
 import { H2HCard, H2HButton } from "../ui";
 import { Link } from "react-router-dom";
 
 export default function Login({ onLoggedIn }) {
-  const [email, setEmail] = useState("boot@example.com");
-  const [password, setPassword] = useState("123456");
+  const [email, setEmail] = useState("demo@h2h.app");
+  const [password, setPassword] = useState("pass1234");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,8 +19,10 @@ export default function Login({ onLoggedIn }) {
       const res = await api("/api/auth/login", {
         method: "POST",
         body: { email, password },
+        auth: false,                 // ✅ login ไม่ต้องแนบ Bearer
       });
-      onLoggedIn(res.token);
+      setToken(res.token);           // ✅ เก็บ token ลง storage
+      onLoggedIn?.(res.token);       // (ถ้ามี parent จะได้อัปเดต state ต่อ)
     } catch (e) {
       setMsg(e.message || "Login failed");
     } finally {
@@ -36,22 +40,20 @@ export default function Login({ onLoggedIn }) {
 
         <form onSubmit={submit} className="grid gap-4">
           <div>
-            <label className="block text-sm mb-1 text-[var(--fg-muted)]">
-              Email
-            </label>
+            <label className="block text-sm mb-1 text-[var(--fg-muted)]">Email</label>
             <input
               className="input"
+              type="email"                      // ✅ type email
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="example@email.com"
               required
+              autoComplete="username"          // ✅ ช่วย autofill
             />
           </div>
 
           <div>
-            <label className="block text-sm mb-1 text-[var(--fg-muted)]">
-              Password
-            </label>
+            <label className="block text-sm mb-1 text-[var(--fg-muted)]">Password</label>
             <input
               className="input"
               type="password"
@@ -59,29 +61,20 @@ export default function Login({ onLoggedIn }) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••"
               required
+              autoComplete="current-password"  // ✅ ช่วย autofill
             />
           </div>
 
-          {msg && (
-            <div className="text-red-400 text-sm text-center mt-1">{msg}</div>
-          )}
+          {msg && <div className="text-red-400 text-sm text-center mt-1">❌ {msg}</div>}
 
-          <H2HButton
-            type="submit"
-            variant="gold"
-            className="mt-3"
-            disabled={loading}
-          >
+          <H2HButton type="submit" variant="gold" className="mt-3" disabled={loading}>
             {loading ? "Logging in..." : "Login"}
           </H2HButton>
         </form>
 
         <div className="mt-4 text-center text-sm text-[var(--fg-muted)]">
           ยังไม่มีบัญชี?{" "}
-          <Link
-            to="/register"
-            className="text-[var(--accent)] hover:underline hover:text-[var(--accent2)]"
-          >
+          <Link to="/register" className="text-[var(--accent)] hover:underline hover:text-[var(--accent2)]">
             สร้างบัญชีใหม่
           </Link>
         </div>
