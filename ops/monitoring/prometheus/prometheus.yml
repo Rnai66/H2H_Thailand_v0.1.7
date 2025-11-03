@@ -1,0 +1,39 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "h2h-backend"
+    metrics_path: /h2h_metrics
+    basic_auth:
+      username: metrics-user
+      password: STRONG_PASSWORD
+    static_configs:
+      - targets: ["nginx:8080"]
+
+  # ตรวจ /api/health/ready ด้วย blackbox-exporter (ต้องได้ HTTP 2xx)
+  - job_name: "h2h-probe"
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://host.docker.internal:4000/api/health/ready
+    relabel_configs:
+      # 1) ใช้ค่า __address__ (target URL) ไปใส่ใน __param_target (เป็น query param ให้ blackbox)
+      - source_labels: [__address__]
+        target_label: __param_target
+      # 2) ทำให้ label instance อ่านง่าย = URL เป้าหมาย
+      - source_labels: [__param_target]
+        target_label: instance
+      # 3) เปลี่ยนปลายทางจริงที่จะ scrape เป็น blackbox exporter
+      - target_label: __address__
+        replacement: blackbox:9115
+
+rule_files:
+  - /etc/prometheus/alert.rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]

@@ -1,0 +1,36 @@
+groups:
+ 
+
+  # ========== REAL PRODUCTION-LIKE ==========
+  - name: h2h-real-alerts
+    interval: 15s
+    rules:
+      # 1) ระบบ H2H health metric ดับ (DB ไม่พร้อม/รวมๆล้ม) ต่อเนื่อง
+      - alert: H2H_Health_Down
+        expr: h2h_health_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "H2H health is DOWN"
+          description: "h2h_health_up == 0 for 2m. Check /api/health/ready and DB connections."
+
+      # 2) Prometheus เก็บ metrics จาก Nginx ไม่ได้ (target down)
+      - alert: H2H_Metrics_Scrape_Down
+        expr: up{job="h2h-backend"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "H2H metrics scrape DOWN"
+          description: "Prometheus failed to scrape h2h-backend via Nginx for 1m."
+
+      # 3) Blackbox probe: readiness endpoint ไม่สำเร็จ (ไม่ใช่ 2xx) ต่อเนื่อง
+      - alert: H2H_API_Ready_Probe_Fail
+        expr: probe_success{job="h2h-probe"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "H2H readiness endpoint failed"
+          description: "Blackbox probe to /api/health/ready is failing (non-2xx) for 1m."

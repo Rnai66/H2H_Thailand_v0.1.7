@@ -1,0 +1,43 @@
+{
+  "title": "H2H Backend – Ops",
+  "tags": ["h2h", "node", "mongodb"],
+  "timezone": "browser",
+  "refresh": "15s",
+  "schemaVersion": 38,
+  "version": 1,
+  "panels": [
+    { "type": "stat", "title": "Health", "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "h2h_health_up", "refId": "A", "datasource": { "type": "prometheus", "uid": "Prometheus" }}],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "value" },
+      "fieldConfig": { "defaults": {
+        "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }}, "overrides": [] } },
+    { "type": "stat", "title": "Users", "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "h2h_users_total", "refId": "A", "datasource": { "type": "prometheus", "uid": "Prometheus" }}] },
+    { "type": "stat", "title": "Items (Active / Total)", "gridPos": { "x": 8, "y": 0, "w": 8, "h": 4 },
+      "targets": [{ "expr": "h2h_items_active", "refId": "A", "datasource": { "type": "prometheus", "uid": "Prometheus" }}],
+      "description": "ใช้คู่กับกราฟด้านล่าง",
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value", "textMode": "value" } },
+    { "type": "timeseries", "title": "Revenue Today", "gridPos": { "x": 0, "y": 4, "w": 8, "h": 8 },
+      "targets": [{ "expr": "h2h_revenue_today", "refId": "A", "datasource": { "type": "prometheus", "uid": "Prometheus" }}],
+      "fieldConfig": { "defaults": { "unit": "baht" }, "overrides": [] } },
+    { "type": "timeseries", "title": "Items Today", "gridPos": { "x": 8, "y": 4, "w": 8, "h": 8 },
+      "targets": [{ "expr": "h2h_items_today", "refId": "A", "datasource": { "type": "prometheus", "uid": "Prometheus" }}] },
+    { "type": "timeseries", "title": "Node CPU (rate)", "gridPos": { "x": 0, "y": 12, "w": 8, "h": 8 },
+      "targets": [{ "expr": "rate(h2h_process_cpu_seconds_total[5m])", "refId": "A", "datasource": { "type": "prometheus", "uid": "Prometheus" }}] },
+    { "type": "timeseries", "title": "Node RSS Memory", "gridPos": { "x": 8, "y": 12, "w": 8, "h": 8 },
+      "targets": [{ "expr": "h2h_process_resident_memory_bytes", "refId": "A", "datasource": { "type": "prometheus", "uid": "Prometheus" }}],
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] } },
+    { "type": "table", "title": "Snapshot – Totals", "gridPos": { "x": 0, "y": 20, "w": 16, "h": 8 },
+      "targets": [
+        { "expr": "h2h_users_total", "refId": "A", "datasource": { "type": "prometheus", "uid": "Prometheus" }},
+        { "expr": "h2h_items_total", "refId": "B", "datasource": { "type": "prometheus", "uid": "Prometheus" }},
+        { "expr": "h2h_items_active", "refId": "C", "datasource": { "type": "prometheus", "uid": "Prometheus" }},
+        { "expr": "h2h_items_sold", "refId": "D", "datasource": { "type": "prometheus", "uid": "Prometheus" }},
+        { "expr": "h2h_payments_total", "refId": "E", "datasource": { "type": "prometheus", "uid": "Prometheus" }},
+        { "expr": "h2h_tokens_total", "refId": "F", "datasource": { "type": "prometheus", "uid": "Prometheus" }},
+        { "expr": "h2h_profiles_total", "refId": "G", "datasource": { "type": "prometheus", "uid": "Prometheus" }} ],
+      "options": { "showHeader": true } }
+  ],
+  "templating": { "list": [] }
+}

@@ -1,77 +1,30 @@
+// backend/src/routes/auth.js
 import { Router } from "express";
-import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { getConnection, DBNAMES } from "../config/dbPool.js";
-import { UserModel } from "../models/User.js";
-import { protect } from "../middleware/auth.js";
+import { requireAuth } from "../middlewares/requireAuth.js";
 
-const router = Router();
+const r = Router();
 
-/* 🔐 สร้าง JWT */
-function signToken(user) {
-  return jwt.sign(
-    {
-      id: user._id,
-      email: user.email,
-      role: user.role || "user",
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "90d" }
-  );
-}
-
-/* ================================
-   POST /api/auth/login
-   - ตรวจอีเมล + รหัสผ่าน
-   - คืน token + ข้อมูลผู้ใช้
-================================== */
-router.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password)
-      return res.status(400).json({ message: "Email and password required" });
-
-    const conn = getConnection(DBNAMES.USER);
-    const User = UserModel(conn);
-
-    const user = await User.findOne({ email: String(email).toLowerCase() }).select("+password");
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).json({ message: "Invalid password" });
-
-    const token = signToken(user);
-
-    res.json({
-      message: "✅ Login success",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    });
-  } catch (e) {
-    res.status(500).json({ message: "Login failed", error: e.message });
-  }
+/** DEV login (ใช้ JWT จริงจาก JWT_SECRET)
+ * body: { email, password }
+ * *ยังไม่ผูก User DB จริง เพื่อเริ่มงานโพสต์ขายได้ก่อน*
+ */
+r.post("/login", (req, res) => {
+  const { email = "login@test.com", password } = req.body || {};
+  const user = {
+    id: "6902f3370b58aadf3954565d",
+    email,
+    name: "LoginTester",
+    role: "admin",
+  };
+  const token = jwt.sign(user, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || "90d",
+  });
+  res.json({ message: "✅ Login success", token, user });
 });
 
-/* ================================
-   GET /api/auth/profile
-   - ใช้ token (ผ่าน protect)
-   - คืนข้อมูลโปรไฟล์ของ user
-================================== */
-router.get("/profile", protect, async (req, res) => {
-  try {
-    const conn = getConnection(DBNAMES.USER);
-    const User = UserModel(conn);
-    const user = await User.findById(req.user.id).select("-password");
-    if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({ user });
-  } catch (e) {
-    res.status(500).json({ message: "Failed to get profile", error: e.message });
-  }
+r.get("/profile", requireAuth, (req, res) => {
+  res.json({ user: req.user });
 });
 
-export default router;
+export default r;

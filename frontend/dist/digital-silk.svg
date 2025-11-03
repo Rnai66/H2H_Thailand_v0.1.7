@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <defs>
+    <pattern id="silk" patternUnits="userSpaceOnUse" width="40" height="40">
+      <path d="M0 0L40 40ZM40 0L0 40Z" stroke="gold" stroke-width="0.3" opacity="0.3"/>
+    </pattern>
+  </defs>
+  <rect width="400" height="400" fill="url(#silk)" />
+</svg>

@@ -1,0 +1,34 @@
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+  receiver: default-receiver
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: critical-receiver
+
+receivers:
+  - name: default-receiver
+    email_configs:
+      - to: "YOUR_EMAIL@example.com"
+        from: "ALERT_SENDER@example.com"
+        smarthost: "smtp.example.com:587"
+        auth_username: "SMTP_USER"
+        auth_password: "SMTP_PASS"
+        require_tls: true
+
+  - name: critical-receiver
+    telegram_configs:
+      - bot_token: "123456789:TELEGRAM_BOT_TOKEN"
+        chat_id: 123456789
+        parse_mode: "MarkdownV2"
+        message: |
+          *{{ .CommonLabels.alertname }}*  ({{ .Status }})
+          Severity: {{ .CommonLabels.severity }}
+          {{ range .Alerts -}}
+          {{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          {{ end }}
+        disable_notifications: false

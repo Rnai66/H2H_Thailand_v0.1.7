@@ -1,10 +1,9 @@
 // frontend/src/pages/ItemsPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import api from "../lib/api"; // ✅ ใช้ default import เท่านั้น
+import api from "../lib/api"; // ✅ default import เท่านั้น
 
 // --- Fallback UI (ไม่มีการพึ่ง Modal/Skeleton ภายนอก) ---
 function SimpleDialog({ open, onClose, title, children }) {
-  // ใช้ <dialog> ง่าย ๆ กันพัง
   return (
     <div
       style={{
@@ -46,6 +45,24 @@ function LoadingRows({ rows = 5, cols = 6 }) {
 }
 
 export default function ItemsPage({ me, toast = console }) {
+  // ======= local me (โหลดเองถ้า parent ไม่ส่งมา) =======
+  const [meLocal, setMeLocal] = useState(null);
+  useEffect(() => {
+    let stop = false;
+    if (!me) {
+      (async () => {
+        try {
+          const res = await api("/api/auth/profile", { auth: true });
+          if (!stop) setMeLocal(res.user || null);
+        } catch {
+          if (!stop) setMeLocal(null);
+        }
+      })();
+    }
+    return () => { stop = true; };
+  }, [me]);
+  const user = me || meLocal;
+
   // ======= Query state =======
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -66,7 +83,7 @@ export default function ItemsPage({ me, toast = console }) {
   const [draft, setDraft] = useState({ title: "", price: 0, description: "" });
   const [editId, setEditId] = useState(null);
 
-  const canCreate = !!me; // POST/PUT/DELETE ต้อง auth; GET เปิดได้
+  const canCreate = !!user; // ต้อง auth เพื่อเขียน
 
   const params = useMemo(() => {
     const u = new URLSearchParams({ page, limit, sort });
@@ -94,7 +111,7 @@ export default function ItemsPage({ me, toast = console }) {
 
   // ======= Handlers =======
   function openNew() {
-    if (!me) { toast.error?.("Please login first"); return; }
+    if (!user) { toast?.error?.("Please login first"); return; }
     setDraft({ title: "", price: 0, description: "" });
     setOpenCreate(true);
   }
@@ -102,17 +119,18 @@ export default function ItemsPage({ me, toast = console }) {
   async function submitNew(e) {
     e.preventDefault();
     try {
+      const sellerId = user?.id || user?._id; // รองรับทั้ง id และ _id
       const payload = {
         ...draft,
         price: Number(draft.price || 0),
-        sellerId: me?._id, // backend เช็ค ownerOrAdmin ด้วย
+        sellerId,
       };
       await api("/api/items", { method: "POST", body: payload, auth: true });
-      toast.success?.("Created");
+      toast?.success?.("Created");
       setOpenCreate(false);
       load();
     } catch (e) {
-      toast.error?.(e.message);
+      toast?.error?.(e.message || "Create failed");
     }
   }
 
@@ -134,12 +152,12 @@ export default function ItemsPage({ me, toast = console }) {
         body: { ...draft, price: Number(draft.price || 0) },
         auth: true,
       });
-      toast.success?.("Updated");
+      toast?.success?.("Updated");
       setOpenEdit(false);
       setEditId(null);
       load();
     } catch (e) {
-      toast.error?.(e.message);
+      toast?.error?.(e.message || "Update failed");
     }
   }
 
@@ -150,17 +168,17 @@ export default function ItemsPage({ me, toast = console }) {
       toast?.success?.("Soft-deleted");
       load();
     } catch (e) {
-      toast.error?.(e.message);
+      toast?.error?.(e.message || "Delete failed");
     }
   }
 
   async function softRestore(id) {
     try {
       await api(`/api/items/${id}`, { method: "PUT", body: { isDeleted: false }, auth: true });
-      toast.success?.("Restored");
+      toast?.success?.("Restored");
       load();
     } catch (e) {
-      toast.error?.(e.message);
+      toast?.error?.(e.message || "Restore failed");
     }
   }
 
@@ -249,6 +267,12 @@ export default function ItemsPage({ me, toast = console }) {
                   <td className="td">
                     {!r.isDeleted ? (
                       <>
+                        <a
+                          className="btn btn-gold"
+                          href={`/checkout?itemId=${encodeURIComponent(r._id)}&amount=${encodeURIComponent(r.price)}&title=${encodeURIComponent(r.title)}`}
+                        >
+                          Buy
+                        </a>{" "}
                         <button className="btn btn-ghost" onClick={() => openEditItem(r)}>
                           Edit
                         </button>{" "}

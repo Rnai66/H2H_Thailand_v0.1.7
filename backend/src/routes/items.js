@@ -1,155 +1,98 @@
+// backend/src/routes/items.js
 import { Router } from "express";
-import mongoose from "mongoose";
-import { protect } from "../middleware/auth.js";
 import { getConn } from "../config/db.js";
 import { getItemModel } from "../models/Item.js";
+import { requireAuth } from "../middlewares/requireAuth.js";
 
-const router = Router();
-const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id || "");
+const r = Router();
 
-const parsePaging = (req) => {
-  const page = Math.max(parseInt(req.query.page ?? "1", 10), 1);
-  const limit = Math.min(Math.max(parseInt(req.query.limit ?? "10", 10), 1), 100);
-  const skip = (page - 1) * limit;
-  const sortIn = typeof req.query.sort === "string" ? req.query.sort : "-createdAt";
-  const sort = sortIn.startsWith("-") ? { [sortIn.slice(1)]: -1 } : { [sortIn]: 1 };
-  return { page, limit, skip, sort };
-};
+async function getItem() {
+  const conn = await getConn(process.env.DB_ITEM || "item_db");
+  return getItemModel(conn);
+}
 
-const buildFilters = (req) => {
-  const f = {};
-  if (req.query.q) {
-    const q = String(req.query.q);
-    f.$or = [
-      { title: { $regex: q, $options: "i" } },
-      { description: { $regex: q, $options: "i" } },
-    ];
-  }
-  if (req.query.status && ["active","inactive","sold"].includes(req.query.status)) {
-    f.status = req.query.status;
-  }
-  if (req.query.includeDeleted !== "true") {
-    f.isDeleted = { $ne: true };
-  }
-  if (req.query.sellerId && isValidObjectId(req.query.sellerId)) {
-    f.sellerId = req.query.sellerId;
-  }
-  return f;
-};
-
-// GET /api/items
-router.get("/", async (req, res) => {
+// List (public)
+r.get("/", async (req, res) => {
   try {
-    const { page, limit, skip, sort } = parsePaging(req);
-    const filter = buildFilters(req);
-    const conn = await getConn(process.env.DB_ITEM || "item_db");
-    const Item = getItemModel(conn);
+    const Item = await getItem();
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 10);
+    const sort = String(req.query.sort || "-createdAt");
+    const q = (req.query.q || "").toString().trim().toLowerCase();
+    const status = (req.query.status || "").toString().trim();
+    const includeDeleted = req.query.includeDeleted === "1";
+
+    const where = {};
+    if (!includeDeleted) where.isDeleted = false;
+    if (status) where.status = status;
+    if (q) where.title = { $regex: q, $options: "i" };
 
     const [items, total] = await Promise.all([
-      Item.find(filter).sort(sort).skip(skip).limit(limit).lean(),
-      Item.countDocuments(filter),
+      Item.find(where)
+        .sort(sort.replace("-", "-"))
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean()
+        .exec(),
+      Item.countDocuments(where).exec(),
     ]);
+
     res.json({ page, limit, total, items });
   } catch (e) {
-    console.error("❌ items.index error:", e);
-    res.status(500).json({ message: "Failed to list items", error: e.message });
+    res.status(500).json({ message: e?.message || "List failed" });
   }
 });
 
-// GET /api/items/:id
-router.get("/:id", async (req, res) => {
+// Create (protected)
+r.post("/", requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid item id" });
-    const conn = await getConn(process.env.DB_ITEM || "item_db");
-    const Item = getItemModel(conn);
+    const { title, price, description, sellerId } = req.body || {};
+    if (!title) return res.status(400).json({ message: "title required" });
 
-    const item = await Item.findById(id).lean();
-    if (!item || item.isDeleted) return res.status(404).json({ message: "Item not found" });
-    res.json(item);
-  } catch (e) {
-    console.error("❌ items.show error:", e);
-    res.status(500).json({ message: "Failed to get item", error: e.message });
-  }
-});
-
-// POST /api/items  (ใช้ sellerId จาก token)
-router.post("/", protect, async (req, res) => {
-  try {
-    const conn = await getConn(process.env.DB_ITEM || "item_db");
-    const Item = getItemModel(conn);
-
-    const body = req.body || {};
-    const created = await Item.create({
-      title: body.title?.trim(),
-      description: body.description ?? "",
-      price: Number(body.price ?? 0),
-      status: ["active","inactive","sold"].includes(body.status) ? body.status : "active",
-      images: Array.isArray(body.images) ? body.images : [],
-      sellerId: req.user.id,
+    const Item = await getItem();
+    const it = await Item.create({
+      title,
+      price: Number(price || 0),
+      description: description || "",
+      sellerId: sellerId || req.user?.id,
+      status: "active",
+      isDeleted: false,
     });
-    res.status(201).json({ item: created });
+    res.json(it);
   } catch (e) {
-    console.error("❌ items.create error:", e);
-    res.status(500).json({ message: "Failed to create item", error: e.message });
+    res.status(500).json({ message: e?.message || "Create failed" });
   }
 });
 
-// PUT /api/items/:id
-router.put("/:id", protect, async (req, res) => {
+// Update (protected)
+r.put("/:id", requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid item id" });
+    const Item = await getItem();
+    const patch = req.body || {};
+    if (patch.price != null) patch.price = Number(patch.price);
+    patch.updatedAt = new Date();
 
-    const conn = await getConn(process.env.DB_ITEM || "item_db");
-    const Item = getItemModel(conn);
-
-    const existing = await Item.findById(id);
-    if (!existing) return res.status(404).json({ message: "Item not found" });
-    if (String(existing.sellerId) !== String(req.user.id) && req.user?.role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    const patch = {};
-    if (typeof req.body.title === "string") patch.title = req.body.title.trim();
-    if (typeof req.body.description === "string") patch.description = req.body.description;
-    if (req.body.price != null) patch.price = Number(req.body.price);
-    if (["active","inactive","sold"].includes(req.body.status)) patch.status = req.body.status;
-    if (Array.isArray(req.body.images)) patch.images = req.body.images;
-    if (req.body.isDeleted === true) { patch.isDeleted = true; patch.deletedAt = new Date(); }
-    if (req.body.isDeleted === false) { patch.isDeleted = false; patch.deletedAt = null; }
-
-    const updated = await Item.findByIdAndUpdate(id, patch, { new: true, lean: true });
-    res.json({ item: updated });
+    const it = await Item.findByIdAndUpdate(req.params.id, patch, { new: true }).lean().exec();
+    if (!it) return res.status(404).json({ message: "Not found" });
+    res.json(it);
   } catch (e) {
-    console.error("❌ items.update error:", e);
-    res.status(500).json({ message: "Failed to update item", error: e.message });
+    res.status(500).json({ message: e?.message || "Update failed" });
   }
 });
 
-// DELETE /api/items/:id (soft)
-router.delete("/:id", protect, async (req, res) => {
+// Soft-delete (protected)
+r.delete("/:id", requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid item id" });
-
-    const conn = await getConn(process.env.DB_ITEM || "item_db");
-    const Item = getItemModel(conn);
-
-    const existing = await Item.findById(id);
-    if (!existing) return res.status(404).json({ message: "Item not found" });
-    if (String(existing.sellerId) !== String(req.user.id) && req.user?.role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    const deleted = await Item.findByIdAndUpdate(
-      id, { isDeleted: true, deletedAt: new Date() }, { new: true, lean: true }
-    );
-    res.json({ message: "Item soft-deleted", item: deleted });
+    const Item = await getItem();
+    const it = await Item.findById(req.params.id).exec();
+    if (!it) return res.status(404).json({ message: "Not found" });
+    it.isDeleted = true;
+    it.deletedAt = new Date();
+    await it.save();
+    res.json({ ok: true });
   } catch (e) {
-    console.error("❌ items.delete error:", e);
-    res.status(500).json({ message: "Failed to delete item", error: e.message });
+    res.status(500).json({ message: e?.message || "Delete failed" });
   }
 });
 
-export default router;
+export default r;

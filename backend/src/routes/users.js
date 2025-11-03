@@ -13,14 +13,17 @@ const router = Router();
 // parsePaging (fallback ถ้า project ไม่มี helper)
 function parsePaging(req) {
   if (typeof _parsePaging === "function") return _parsePaging(req);
+
   const page = Math.max(parseInt(req.query.page ?? "1", 10), 1);
   const limit = Math.min(Math.max(parseInt(req.query.limit ?? "10", 10), 1), 100);
   const skip = (page - 1) * limit;
-  // รองรับ sort param เช่น -createdAt หรือ email
+
+  // รองรับ sort param เช่น "-createdAt" หรือ "email"
   const sortParam = typeof req.query.sort === "string" ? req.query.sort : "-createdAt";
   const sort = sortParam.startsWith("-")
     ? { [sortParam.slice(1)]: -1 }
     : { [sortParam]: 1 };
+
   return { page, limit, skip, sort };
 }
 
@@ -42,6 +45,7 @@ router.get("/", protect, authorize("admin"), async (req, res) => {
 
     const filter = {};
     const { q, role } = req.query;
+
     if (q) {
       const kw = String(q).trim();
       filter.$or = [
@@ -49,6 +53,7 @@ router.get("/", protect, authorize("admin"), async (req, res) => {
         { email: { $regex: kw, $options: "i" } },
       ];
     }
+
     if (role === "admin" || role === "user") {
       filter.role = role;
     }

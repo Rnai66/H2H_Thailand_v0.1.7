@@ -22,6 +22,8 @@ import Dashboard from "./pages/Dashboard.jsx";
 import ItemList from "./pages/ItemList.jsx";
 import ItemEdit from "./pages/ItemEdit.jsx";
 import ItemsAdmin from "./pages/ItemsAdmin.jsx";
+import Checkout from "./pages/Checkout.jsx";
+
 
 /* ---------- Guards ---------- */
 function Protected({ me, children }) {
@@ -192,6 +194,15 @@ function InnerApp() {
     </Protected>
   }
 />
+<Route
+  path="/checkout"
+  element={
+    <Protected me={me}>
+      <Checkout />
+    </Protected>
+  }
+/>
+
 
 
 

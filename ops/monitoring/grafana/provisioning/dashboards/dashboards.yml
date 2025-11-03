@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: "H2H Dashboards"
+    folder: "H2H"
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards
+    disableDeletion: false
+    editable: true
