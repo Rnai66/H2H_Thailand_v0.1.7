@@ -1,11 +1,11 @@
-// backend/src/server.js
 import express from "express";
 import http from "http";
 import dotenv from "dotenv";
-import cors from "cors";
 import cookieParser from "cookie-parser";
 import morgan from "morgan";
+import cors from "cors";
 import { Server as SocketIOServer } from "socket.io";
+import { corsOptions } from "./middleware/cors.js"; // ✅ ใช้ตัวเดียวพอ
 
 // ===== routes =====
 import authRoutes from "./routes/auth.js";
@@ -18,43 +18,29 @@ import healthRoutes from "./routes/healthRoutes.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import metricsRoutes from "./routes/metrics.js";
 
+import { connectAll, closeAll } from "./config/db.js";
+
 dotenv.config();
 
 const app = express();
 
-// ===== CORS allow-list (comma-separated) =====
-const allow = (process.env.CORS_ORIGIN?.split(",") ?? ["http://localhost:5173"])
-  .map(s => s.trim())
-  .filter(Boolean);
-
-// If you want to allow credentials with multiple origins, provide a function:
-const corsOptions = {
-  origin(origin, callback) {
-    if (!origin) return callback(null, true); // allow non-browser tools (curl/postman)
-    const ok = allow.includes(origin);
-    callback(ok ? null : new Error("CORS blocked: " + origin), ok);
-  },
-  credentials: true,
-};
-
+// ===== CORS (เปิดใช้งานก่อนทุกอย่าง) =====
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // preflight for all
+app.options("*", cors(corsOptions)); // Preflight สำหรับทุก route
 
 // ===== parsers / logging =====
-app.use(express.json({ limit: "1mb" })); // adjust if you need bigger
+app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
-// ===== small helpers =====
+// ===== basic routes =====
 app.get("/", (_req, res) => res.json({ ok: true, name: "H2H API" }));
-app.get("/favicon.ico", (_req, res) => res.status(204).end()); // avoid 404 noise
-app.get("/health", (_req, res) => res.json({ ok: true }));     // simple liveness
-
-// Optional readiness (extend in healthRoutes to check DB later)
+app.get("/favicon.ico", (_req, res) => res.status(204).end());
+app.get("/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/health/ready", (_req, res) => res.json({ ready: true }));
 
-// ===== REST routes =====
-app.use("/api/health", healthRoutes);       // e.g., /live, /ready, /db (as you implemented)
+// ===== main REST routes =====
+app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemsRoutes);
 app.use("/api/users", usersRoutes);
@@ -64,45 +50,34 @@ app.use("/api/profiles", profilesRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/metrics", metricsRoutes);
 
-// ===== 404 fallback =====
+// ===== fallback =====
 app.use((_req, res) => res.status(404).json({ message: "Not Found" }));
 
-// ===== error handler (must be after routes) =====
-/* eslint-disable no-unused-vars */
+// ===== error handler =====
 app.use((err, _req, res, _next) => {
   const status = err.status || 500;
   const msg = err.message || "Internal Server Error";
-  if (process.env.NODE_ENV !== "test") {
-    console.error("❌ Error:", msg);
-  }
+  console.error("❌ Error:", msg);
   res.status(status).json({ error: msg });
 });
-/* eslint-enable no-unused-vars */
 
 // ===== HTTP + Socket.IO =====
 const server = http.createServer(app);
 const io = new SocketIOServer(server, {
-  cors: { ...corsOptions },
+  cors: corsOptions,
   path: "/socket.io",
 });
 
 io.on("connection", (socket) => {
   console.log("💬 user connected:", socket.id);
-
-  socket.on("disconnect", () => {
-    console.log("❌ user disconnected:", socket.id);
-  });
+  socket.on("disconnect", () => console.log("❌ user disconnected:", socket.id));
 });
 
-// ===== boot & gracef
-// ===== boot & graceful shutdown =====
-import { connectAll, closeAll } from "./config/db.js";
-
+// ===== start server =====
 const PORT = process.env.PORT || 4000;
-
 server.listen(PORT, async () => {
   try {
-    await connectAll(); // เชื่อม DB พื้นฐานให้พร้อมก่อนรับโหลด
+    await connectAll();
     console.log(`🚀 H2H Backend running on port ${PORT}`);
   } catch (err) {
     console.error("❌ DB init failed:", err?.message || err);
@@ -110,6 +85,7 @@ server.listen(PORT, async () => {
   }
 });
 
+// ===== graceful shutdown =====
 function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down gracefully...`);
   io.close(() => {
@@ -123,8 +99,6 @@ function shutdown(signal) {
       process.exit(0);
     });
   });
-
-  // กันแขวน
   setTimeout(() => {
     console.warn("⏱ Force exit.");
     process.exit(1);
@@ -134,5 +108,4 @@ function shutdown(signal) {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
-// (optional) export for tests
 export { app, server, io };
