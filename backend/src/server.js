@@ -1,3 +1,4 @@
+// src/server.js
 import express from "express";
 import http from "http";
 import dotenv from "dotenv";
@@ -5,7 +6,7 @@ import cookieParser from "cookie-parser";
 import morgan from "morgan";
 import cors from "cors";
 import { Server as SocketIOServer } from "socket.io";
-import { corsOptions } from "./middleware/cors.js"; // ✅ ใช้ตัวเดียวพอ
+import { corsOptions } from "./middleware/cors.js";
 
 // ===== routes =====
 import authRoutes from "./routes/auth.js";
@@ -24,22 +25,22 @@ dotenv.config();
 
 const app = express();
 
-// ===== CORS (เปิดใช้งานก่อนทุกอย่าง) =====
+// ===== CORS (enable before everything) =====
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // Preflight สำหรับทุก route
+app.options("*", cors(corsOptions)); // Preflight for all routes
 
 // ===== parsers / logging =====
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
-// ===== basic routes =====
+// ===== basic helpers =====
 app.get("/", (_req, res) => res.json({ ok: true, name: "H2H API" }));
 app.get("/favicon.ico", (_req, res) => res.status(204).end());
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/health/ready", (_req, res) => res.json({ ready: true }));
 
-// ===== main REST routes =====
+// ===== REST routes =====
 app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemsRoutes);
@@ -50,16 +51,18 @@ app.use("/api/profiles", profilesRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/metrics", metricsRoutes);
 
-// ===== fallback =====
+// ===== 404 fallback =====
 app.use((_req, res) => res.status(404).json({ message: "Not Found" }));
 
 // ===== error handler =====
+/* eslint-disable no-unused-vars */
 app.use((err, _req, res, _next) => {
   const status = err.status || 500;
   const msg = err.message || "Internal Server Error";
   console.error("❌ Error:", msg);
   res.status(status).json({ error: msg });
 });
+/* eslint-enable no-unused-vars */
 
 // ===== HTTP + Socket.IO =====
 const server = http.createServer(app);
@@ -73,7 +76,7 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => console.log("❌ user disconnected:", socket.id));
 });
 
-// ===== start server =====
+// ===== boot =====
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, async () => {
   try {
